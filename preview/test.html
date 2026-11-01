@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en" class="theme-dark">
+<head>
+<meta charset="utf-8">
+<title>Renewals tests</title>
+<style>
+body { font: 13px/1.5 ui-monospace, Menlo, monospace; background: #111; color: #ddd; margin: 0; padding: 16px; }
+#out .pass { color: #44cf6e; } #out .fail { color: #fb464c; white-space: pre-wrap; }
+#stage { position: absolute; left: -10000px; width: 1200px; }
+</style>
+</head>
+<body>
+<h1 id="summary">Running…</h1>
+<div id="out"></div>
+<div id="stage"></div>
+<script src="obsidian-shim.js"></script>
+<script>
+(async () => {
+  const STORE = 'st-preview-data';
+  const saved = localStorage.getItem(STORE);
+  const out = document.getElementById('out');
+  const results = [];
+  const tick = (ms = 15) => new Promise((r) => setTimeout(r, ms));
+  const iso = (d) => { const x = new Date(); x.setDate(x.getDate() + d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  function ok(cond, msg) { if (!cond) throw new Error(msg); }
+  function eq(a, b, msg) { if (JSON.stringify(a) !== JSON.stringify(b)) throw new Error(`${msg}: expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}`); }
+  async function test(name, fn) {
+    try { await fn(); results.push([true, name]); }
+    catch (e) { results.push([false, name, e.message]); }
+    document.querySelectorAll('.modal-container').forEach((m) => m.remove());
+  }
+
+  // ── Fixture: dates relative to today so results are stable ──
+  const fixture = {
+    primaryCurrency: 'USD', reminderDays: 3, showLogos: true, rates: { EUR: 1, USD: 1.1, INR: 100 },
+    subscriptions: [
+      { id: 'a', name: 'Alpha Stream', cost: 10, currency: 'USD', billingCycle: 'monthly', category: 'Entertainment', status: 'active', autoRenew: true, renewalDate: iso(2), paymentType: 'Credit card', paymentAccount: 'Visa 4242', url: 'alpha.example', priceHistory: [{ date: iso(-30), oldCost: 8, newCost: 10 }] },
+      { id: 'b', name: 'Beta Cloud', cost: 120, currency: 'EUR', billingCycle: 'yearly', category: 'Cloud', status: 'active', autoRenew: true, renewalDate: iso(20), paymentType: 'Direct debit' },
+      { id: 'c', name: 'Gamma Trial', cost: 15, currency: 'USD', billingCycle: 'monthly', category: 'Tools', status: 'trial', trialEndDate: iso(3), paymentType: 'Credit card' },
+      { id: 'd', name: 'Delta Old', cost: 5, currency: 'USD', billingCycle: 'monthly', category: 'Health', status: 'cancelled' },
+      { id: 'e', name: 'Epsilon Pause', cost: 7, currency: 'USD', billingCycle: 'monthly', category: 'Finance', status: 'paused', renewalDate: iso(5) },
+      { id: 'f', name: 'Zeta Forever', cost: 99, currency: 'USD', billingCycle: 'lifetime', category: 'Tools', status: 'active' },
+      { id: 'g', name: 'Eta Overdue', cost: 50, currency: 'USD', billingCycle: 'monthly', category: 'Utilities', status: 'active', autoRenew: true, renewalDate: iso(-40) },
+      { id: 'h', name: 'Theta Legacy', cost: '4', cycle: 'weekly', status: 'inactive', paymentType: 'Apple Pay', paymentMethod: 'card 1', isTrial: false },
+      { id: 'i', name: '', cost: 5 },
+    ],
+  };
+  localStorage.setItem(STORE, JSON.stringify(fixture));
+
+  // Load main.js with a test-only export of internal helpers
+  const src = await (await fetch('../main.js?' + Date.now())).text();
+  const module = { exports: {} };
+  new Function('module', 'exports', 'require', src + '\nmodule.exports.__t = { advanceDate, parseCSV, normalizeRecord, upcoming, fmt, daysUntil };')(module, module.exports, () => window.__obsidian);
+  const T = module.exports.__t;
+
+  const stage = document.getElementById('stage');
+  const leaf = { containerEl: stage };
+  window.__obsidianLeaves.push(leaf);
+  const plugin = new module.exports();
+  await plugin.onload();
+  leaf.view = plugin._viewFactory(leaf);
+  await leaf.view.onOpen();
+  await tick(30);
+  const view = leaf.view;
+  const $ = (sel) => view.contentEl.querySelector(sel);
+  const $$ = (sel) => [...view.contentEl.querySelectorAll(sel)];
+  const byName = (n) => plugin.data.subscriptions.find((s) => s.name === n);
+  const lastNotice = () => window.__noticeLog[window.__noticeLog.length - 1];
+  const clickUndo = async () => { lastNotice().noticeEl.querySelector('button').click(); await tick(); };
+
+  // ── Pure helpers ──
+  await test('advanceDate keeps month ends (Jan 31 → Feb 28/29)', () => {
+    eq(T.advanceDate('2025-01-31', 'monthly'), '2025-02-28', 'non-leap');
+    eq(T.advanceDate('2024-01-31', 'monthly'), '2024-02-29', 'leap');
+    eq(T.advanceDate('2024-02-29', 'yearly'), '2025-02-28', 'leap day yearly');
+    eq(T.advanceDate('2025-11-30', 'quarterly'), '2026-02-28', 'quarterly');
+    eq(T.advanceDate('2025-12-29', 'weekly'), '2026-01-05', 'weekly across year');
+  });
+  await test('parseCSV handles quotes, commas, newlines and CRLF', () => {
+    const rows = T.parseCSV('name,notes,cost\r\n"Acme, Inc","line1\nline2 ""q""",9\r\nB,,2\r\n');
+    eq(rows.length, 2, 'row count');
+    eq(rows[0].name, 'Acme, Inc', 'quoted comma');
+    eq(rows[0].notes, 'line1\nline2 "q"', 'embedded newline and quotes');
+    eq(rows[1].cost, '2', 'second row');
+  });
+  await test('normalizeRecord cleans legacy and rejects invalid records', () => {
+    const r = T.normalizeRecord({ name: ' X ', cost: '4', cycle: 'weekly', status: 'inactive', paymentType: 'PayPal', paymentMethod: 'acct' }, 'USD');
+    eq([r.name, r.cost, r.billingCycle, r.status, r.paymentType, r.paymentAccount], ['X', 4, 'weekly', 'cancelled', 'Online payment service', 'acct'], 'legacy mapping');
+    eq(T.normalizeRecord({ name: '', cost: 3 }, 'USD'), null, 'empty name');
+    eq(T.normalizeRecord({ name: 'A', cost: -1 }, 'USD'), null, 'negative cost');
+    eq(T.normalizeRecord({ name: 'L', cost: 1, billingCycle: 'one-time', status: 'trial' }, 'USD').status, 'active', 'lifetime trial becomes active');
+    eq(T.normalizeRecord({ name: 'C', cost: 1, autoRenew: 'false' }, 'USD').autoRenew, false, 'CSV boolean');
+    ok(!('isTrial' in r) && !('paymentMethod' in r) && !('cycle' in r), 'legacy fields dropped');
+  });
+
+  // ── Load and data hygiene ──
+  await test('onload drops invalid records and normalizes legacy ones', () => {
+    eq(plugin.data.subscriptions.length, 8, 'record count');
+    eq(byName('Theta Legacy').status, 'cancelled', 'inactive → cancelled');
+    eq(byName('Theta Legacy').paymentType, 'Mobile wallet', 'provider name removed');
+  });
+  await test('auto-advance rolls overdue dates forward and records last payment', () => {
+    const g = byName('Eta Overdue');
+    ok(T.daysUntil(g.renewalDate) >= 0, 'renewal date not in the past: ' + g.renewalDate);
+    ok(T.daysUntil(g.lastPayment) < 0, 'last payment set in the past');
+  });
+
+  // ── Subscriptions tab ──
+  await test('top bar: title, three tabs, currency, export, add', () => {
+    eq($('.st-title').textContent, 'Renewals', 'title');
+    eq($$('.st-tab').map((t) => t.textContent), ['Subscriptions', 'Spend', 'Settings'], 'tabs');
+    ok($('.st-select'), 'currency select');
+    ok($('.st-icon-btn[aria-label="Export or import"]'), 'export button');
+    ok($('.st-btn-cta'), 'add button');
+  });
+  await test('summary figure equals the sum of charges due in 7 days', () => {
+    const due = T.upcoming(plugin.data.subscriptions).filter((s) => s._days <= 7);
+    const sum = due.reduce((n, s) => n + plugin.convert(s.cost, s.currency, 'USD'), 0);
+    eq($('.st-lead-fig').textContent, T.fmt(sum, 'USD'), 'lead figure');
+    eq($$('.st-strip .st-field').length, 3, 'run-rate fields');
+  });
+  await test('trials converting shows the trial with Keep and Cancel trial', () => {
+    const trial = $$('.st-coupon.is-trial');
+    eq(trial.length, 1, 'trial coupons');
+    ok(trial[0].textContent.includes('Gamma Trial'), 'trial name');
+    eq([...trial[0].querySelectorAll('.st-coupon-actions button')].map((b) => b.textContent), ['Keep', 'Cancel trial'], 'actions');
+  });
+  await test('next charges: at most 5 coupons, no trials, soonest first', () => {
+    const coupons = $$('.st-coupon:not(.is-trial)');
+    ok(coupons.length >= 1 && coupons.length <= 5, 'coupon count ' + coupons.length);
+    ok(!coupons.some((c) => c.textContent.includes('Gamma Trial')), 'trial excluded');
+    ok(coupons[0].textContent.includes('Alpha Stream') || coupons[0].textContent.includes('Eta Overdue'), 'soonest first');
+  });
+  await test('stubs: every record, stamped by state, price rise shown', () => {
+    const stubs = $$('.st-stub');
+    eq(stubs.length, 8, 'stub count');
+    const stampOf = (n) => stubs.find((s) => s.textContent.includes(n)).querySelector('.st-stamp')?.textContent;
+    eq(stampOf('Delta Old'), 'Void', 'void');
+    eq(stampOf('Epsilon Pause'), 'Held', 'held');
+    eq(stampOf('Zeta Forever'), 'Lifetime', 'lifetime');
+    eq(stampOf('Gamma Trial'), 'Trial', 'trial');
+    ok(stubs.find((s) => s.textContent.includes('Alpha Stream')).textContent.includes('+25%'), 'price rise');
+    ok(stubs.findIndex((s) => s.textContent.includes('Delta Old')) > stubs.findIndex((s) => s.textContent.includes('Zeta Forever')), 'void sinks below lifetime');
+  });
+  await test('filters: void & held, next 7 days, and empty-result recovery', async () => {
+    const pill = (label) => $$('.st-pill').find((p) => p.textContent.startsWith(label));
+    pill('Void & held').click();
+    eq($$('.st-stub').length, 3, 'void & held count');
+    pill('Next 7 days').click();
+    ok($$('.st-stub').every((s) => !s.classList.contains('is-void')), 'no void in next 7 days');
+    view.searchQuery = 'zzz'; view.render();
+    ok($('.st-no-match'), 'no-match state');
+    $('.st-no-match .st-link').click();
+    eq($$('.st-stub').length, 8, 'cleared');
+  });
+  await test('search filters by name, plan, notes and account', async () => {
+    const input = $('.st-search input');
+    input.value = 'visa'; input.dispatchEvent(new Event('input'));
+    eq($$('.st-stub').length, 1, 'account match');
+    input.value = ''; input.dispatchEvent(new Event('input'));
+    eq($$('.st-stub').length, 8, 'reset');
+  });
+  await test('sort by amount and name, choice persisted', async () => {
+    const sort = $('.st-sort');
+    sort.value = 'amount'; sort.dispatchEvent(new Event('change')); await tick();
+    ok($$('.st-stub')[0].textContent.includes('Beta Cloud'), 'largest first: ' + $$('.st-stub')[0].textContent);
+    sort.value = 'name'; sort.dispatchEvent(new Event('change')); await tick();
+    ok($$('.st-stub')[0].textContent.includes('Alpha Stream'), 'alphabetical');
+    eq(JSON.parse(localStorage.getItem(STORE)).sortBy, 'name', 'persisted');
+    sort.value = 'date'; sort.dispatchEvent(new Event('change')); await tick();
+  });
+
+  // ── Lifecycle actions ──
+  await test('keep trial converts to paid with the trial end as next charge', async () => {
+    const end = byName('Gamma Trial').trialEndDate;
+    $('.st-coupon.is-trial .st-btn-keep').click(); await tick();
+    const c = byName('Gamma Trial');
+    eq([c.status, c.renewalDate, c.autoRenew], ['active', end, true], 'converted');
+    ok(!$('.st-coupon.is-trial'), 'trial row gone');
+  });
+  await test('cancel can be undone', async () => {
+    await plugin.setStatus(byName('Alpha Stream'), 'cancelled');
+    eq(byName('Alpha Stream').status, 'cancelled', 'cancelled');
+    ok(lastNotice().noticeEl.textContent.includes('Undo'), 'undo offered');
+    await clickUndo();
+    eq(byName('Alpha Stream').status, 'active', 'restored');
+  });
+  await test('cancel trial can be undone', async () => {
+    const t = { ...byName('Gamma Trial'), status: 'trial', trialEndDate: iso(4) };
+    await plugin.commit(t);
+    await plugin.cancelTrial(t);
+    eq(byName('Gamma Trial').status, 'cancelled', 'cancelled');
+    await clickUndo();
+    eq(byName('Gamma Trial').status, 'trial', 'trial restored');
+  });
+  await test('delete can be undone, position kept', async () => {
+    const order = plugin.data.subscriptions.map((s) => s.id).join();
+    await plugin.deleteSubscription('b');
+    eq(plugin.data.subscriptions.length, 7, 'deleted');
+    await clickUndo();
+    eq(plugin.data.subscriptions.map((s) => s.id).join(), order, 'restored in place');
+  });
+  await test('duplicate creates an independent copy', async () => {
+    await plugin.duplicateSubscription(byName('Beta Cloud'));
+    const copy = byName('Beta Cloud (copy)');
+    ok(copy && copy.id !== 'b' && copy.priceHistory.length === 0, 'copy');
+    await plugin.deleteSubscription(copy.id);
+  });
+  await test('pause and reactivate from the stub menu', async () => {
+    const stub = $$('.st-stub').find((s) => s.textContent.includes('Beta Cloud'));
+    stub.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
+    const items = [...window.__lastMenu.querySelectorAll('.menu-item')].map((i) => i.textContent);
+    eq(items, ['Edit', 'Duplicate', 'Pause', 'Cancel', 'Delete'], 'menu items');
+    [...window.__lastMenu.querySelectorAll('.menu-item')].find((i) => i.textContent === 'Pause').click(); await tick();
+    eq(byName('Beta Cloud').status, 'paused', 'paused');
+    await plugin.setStatus(byName('Beta Cloud'), 'active');
+  });
+
+  // ── Add / edit modal ──
+  await test('add: validates, then saves a new subscription', async () => {
+    plugin.openAddModal();
+    const modal = document.querySelector('.modal');
+    const save = [...modal.querySelectorAll('button')].find((b) => b.textContent === 'Add subscription');
+    save.click();
+    ok(lastNotice().noticeEl.textContent.includes('Enter a name'), 'name validation');
+    const inputs = [...modal.querySelectorAll('input[type="text"], input[type="number"]')];
+    inputs[0].value = 'Iota Music'; inputs[0].dispatchEvent(new Event('input'));
+    const amount = modal.querySelector('input[type="number"]');
+    amount.value = '9.5'; amount.dispatchEvent(new Event('input'));
+    save.click(); await tick();
+    const added = byName('Iota Music');
+    ok(added && added.cost === 9.5 && added.status === 'active', 'saved');
+  });
+  await test('edit: changing the amount logs a price change', async () => {
+    plugin.openEditModal(byName('Iota Music'));
+    const modal = document.querySelector('.modal');
+    const amount = modal.querySelector('input[type="number"]');
+    amount.value = '12'; amount.dispatchEvent(new Event('input'));
+    [...modal.querySelectorAll('button')].find((b) => b.textContent === 'Save').click(); await tick();
+    const ph = byName('Iota Music').priceHistory;
+    eq([ph.length, ph[0].oldCost, ph[0].newCost], [1, 9.5, 12], 'price history');
+  });
+  await test('edit: switching to free trial shows trial section and presets', async () => {
+    plugin.openEditModal(byName('Iota Music'));
+    const modal = document.querySelector('.modal');
+    const status = [...modal.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'trial'));
+    status.value = 'trial'; status.dispatchEvent(new Event('change'));
+    ok(modal.textContent.includes('Trial ends'), 'trial section');
+    eq(modal.querySelectorAll('.st-chip').length, 4, 'presets');
+    document.querySelector('.modal-close-button').click();
+    eq(byName('Iota Music').status, 'active', 'unsaved edits discarded');
+  });
+
+  // ── Export / import ──
+  await test('export JSON and CSV into the vault folder (overwrite same day)', async () => {
+    await plugin.exportTo('json');
+    await plugin.exportTo('csv');
+    await plugin.exportTo('csv');
+    const today = iso(0);
+    const json = JSON.parse(window.__vaultFiles.get(`Renewals/renewals-${today}.json`).data);
+    eq(json.subscriptions.length, plugin.data.subscriptions.length, 'json records');
+    const csv = window.__vaultFiles.get(`Renewals/renewals-${today}.csv`).data;
+    ok(csv.startsWith('id,name,plan,cost,currency'), 'csv header');
+    eq(csv.trim().split('\n').length, plugin.data.subscriptions.length + 1, 'csv rows');
+  });
+  await test('import CSV: replace, then undo', async () => {
+    const file = await window.__obsidianApp.vault.create('import.csv', 'name,cost,currency,billingCycle,renewalDate\nKappa,3,USD,monthly,' + iso(1) + '\n"Lambda, Ltd",4,EUR,yearly,\n');
+    const before = plugin.data.subscriptions.length;
+    await plugin.importFrom(file);
+    const modal = document.querySelector('.modal');
+    ok(modal.textContent.includes('Found 2 subscriptions'), 'found count');
+    [...modal.querySelectorAll('button')].find((b) => b.textContent === 'Replace').click(); await tick();
+    eq(plugin.data.subscriptions.map((s) => s.name), ['Kappa', 'Lambda, Ltd'], 'replaced');
+    await clickUndo();
+    eq(plugin.data.subscriptions.length, before, 'undo restores');
+  });
+  await test('import JSON backup: merge updates matching ids and adds new', async () => {
+    const backup = { subscriptions: [{ id: 'a', name: 'Alpha Stream', cost: 11, currency: 'USD', billingCycle: 'monthly', renewalDate: iso(2) }, { name: 'Mu News', cost: 2, currency: 'USD' }] };
+    const file = await window.__obsidianApp.vault.create('backup.json', JSON.stringify(backup));
+    const before = plugin.data.subscriptions.length;
+    await plugin.importFrom(file);
+    [...document.querySelectorAll('.modal button')].find((b) => b.textContent === 'Merge').click(); await tick();
+    eq(plugin.data.subscriptions.length, before + 1, 'one added');
+    eq(byName('Alpha Stream').cost, 11, 'matching id updated');
+  });
+  await test('import picker lists only JSON and CSV files', async () => {
+    await window.__obsidianApp.vault.create('notes.md', '# hi');
+    plugin.openImport();
+    const items = [...document.querySelectorAll('.suggestion-item')].map((i) => i.textContent);
+    ok(items.length >= 2 && items.every((p) => /\.(json|csv)$/.test(p)), 'items: ' + items);
+  });
+  await test('import reports unreadable and empty files', async () => {
+    const bad = await window.__obsidianApp.vault.create('bad.json', '{nope');
+    await plugin.importFrom(bad);
+    ok(lastNotice().noticeEl.textContent.startsWith('Could not read bad.json'), 'invalid JSON');
+    const empty = await window.__obsidianApp.vault.create('empty.csv', 'name,cost\n');
+    await plugin.importFrom(empty);
+    ok(lastNotice().noticeEl.textContent.startsWith('No subscriptions found'), 'empty file');
+  });
+
+  // ── Budget, reminders, logos ──
+  await test('budget: near and over states on the monthly figure', async () => {
+    await plugin.update({ monthlyBudget: 1 });
+    ok($('.st-strip .st-field').classList.contains('is-over'), 'over');
+    ok($('.st-field-note').textContent.includes('% of $1'), 'note');
+    const monthly = parseFloat($('.st-strip .st-field-val').textContent.replace(/[^0-9.]/g, ''));
+    await plugin.update({ monthlyBudget: Math.ceil(monthly / 0.95) });
+    ok($('.st-strip .st-field').classList.contains('is-near'), 'near');
+    await plugin.update({ monthlyBudget: 0 });
+    ok(!$('.st-field-note'), 'off');
+  });
+  await test('reminders: shown once a day, forced from the command', async () => {
+    const n = window.__noticeLog.length;
+    await plugin.remind();
+    eq(window.__noticeLog.length, n, 'already shown today on load');
+    await plugin.remind(true);
+    ok(lastNotice().noticeEl.textContent.match(/renewals? in the next 3 days/), 'forced reminder: ' + lastNotice().noticeEl.textContent);
+    ok(lastNotice().noticeEl.querySelector('.st-notice-btn'), 'open button');
+  });
+  await test('logo toggle: no image requests when off', async () => {
+    await plugin.commit({ ...byName('Alpha Stream'), url: 'alpha.example' }); // the merge test replaced this record
+    ok($$('.st-logo img').length > 0, 'logos requested when on'); // counted before offline loads fail
+    await plugin.update({ showLogos: false });
+    eq($$('.st-logo img').length, 0, 'no images');
+    await plugin.update({ showLogos: true });
+  });
+  await test('display currency converts every figure', async () => {
+    await plugin.update({ primaryCurrency: 'INR' });
+    ok($('.st-lead-fig').textContent.startsWith('₹'), 'lead in INR');
+    await plugin.update({ primaryCurrency: 'USD' });
+  });
+
+  // ── Spend, settings, embed, empty ──
+  await test('spend: two panels with proportional bars', () => {
+    view.tab = 'spend'; view.render();
+    eq($$('.st-panel').length, 2, 'panels');
+    const row = $('.st-bar-row');
+    ok(row.style.getPropertyValue('--pct').endsWith('%') && row.style.getPropertyValue('--bar'), 'bar vars');
+    $$('.st-seg button')[1].click();
+    ok($('.st-panel .st-coupon-head').textContent.includes('/yr'), 'annual');
+  });
+  await test('settings tab: preferences and data controls', () => {
+    view.tab = 'settings'; view.render();
+    const names = $$('.setting-item-name').map((n) => n.textContent);
+    eq(names, ['Display currency', 'Monthly budget', 'Renewal reminders', 'Roll renewal dates forward', 'Show service logos', 'Exchange rates', 'Export folder', 'Export', 'Import'], 'settings');
+    const tab = plugin._settingTab; tab.display();
+    ok(tab.containerEl.textContent.includes('Data') && tab.containerEl.querySelectorAll('.setting-item').length === 10, 'plugin settings screen');
+    view.tab = 'subscriptions'; view.render();
+  });
+  await test('note embed renders upcoming rows and refreshes on change', async () => {
+    const el = document.createElement('div');
+    stage.appendChild(el);
+    plugin.codeBlocks.renewals('days: 30', el, { addChild: (c) => c.load() });
+    const expected = T.upcoming(plugin.data.subscriptions).filter((s) => s._days <= 30).length;
+    eq(el.querySelectorAll('.st-embed-row').length, expected, 'rows');
+    await plugin.deleteSubscription('a');
+    eq(el.querySelectorAll('.st-embed-row').length, expected - 1, 'refreshed');
+    await clickUndo();
+    el.querySelector('.st-embed-row').click();
+    ok(document.querySelector('.modal'), 'row opens editor');
+  });
+  await test('empty state offers add and import', async () => {
+    const all = [...plugin.data.subscriptions];
+    await plugin.replaceAll([]);
+    eq($$('.st-empty button').map((b) => b.textContent), ['Add your first subscription', 'Import a backup'], 'actions');
+    await plugin.replaceAll(all);
+  });
+  await test('commands registered with plain names', () => {
+    eq(Object.values(plugin.commands).map((c) => c.name), ['Open dashboard', 'Add subscription', 'Show what renews this week', 'Show renewal reminders', 'Export backup (JSON)', 'Export spreadsheet (CSV)', 'Import backup', 'Roll overdue renewal dates forward'], 'commands');
+  });
+  await test('accessibility basics: labelled controls, focusable stubs', () => {
+    ok($$('button').every((b) => b.textContent.trim() || b.getAttribute('aria-label')), 'every button has a name');
+    ok($$('select').every((s) => s.getAttribute('aria-label')), 'selects labelled');
+    ok($$('.st-stub').every((s) => s.tagName === 'BUTTON'), 'stubs are buttons');
+  });
+
+  // ── Report ──
+  if (saved == null) localStorage.removeItem(STORE); else localStorage.setItem(STORE, saved);
+  const passed = results.filter((r) => r[0]).length;
+  document.getElementById('summary').textContent = `${passed === results.length ? 'PASS' : 'FAIL'} ${passed}/${results.length}`;
+  results.forEach(([p, name, err]) => out.createDiv({ cls: p ? 'pass' : 'fail', text: `${p ? '✓' : '✗'} ${name}${err ? '\n    ' + err : ''}` }));
+  document.title = document.getElementById('summary').textContent;
+})().catch((e) => { document.getElementById('summary').textContent = 'CRASH ' + e.message + '\n' + e.stack; });
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# Personal plugin data written by Obsidian
+data.json
+
+# Internal design workflow files
+.impeccable/
+PRODUCT.md
+
+.DS_Store

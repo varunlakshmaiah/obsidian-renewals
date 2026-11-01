@@ -1,0 +1,1066 @@
+/* ═══════════════════════════════════════════════════════════════
+   Renewals: subscriptions as a ticket wallet
+   Every colour comes from the Obsidian theme. Scoped to .st-root / .st-modal.
+   ═══════════════════════════════════════════════════════════════ */
+
+.st-root,
+.st-modal {
+  --st-rule: var(--background-modifier-border);
+  --st-stock: var(--background-secondary);
+  --st-carbon: var(--text-accent);
+  /* Theme hues pulled 45% toward body text: passes AA on every surface in light and dark */
+  --st-red: color-mix(in srgb, var(--color-red, #e93147) 55%, var(--text-normal));
+  --st-green: color-mix(in srgb, var(--color-green, #08b94e) 55%, var(--text-normal));
+  --st-orange: color-mix(in srgb, var(--color-orange, #ec7500) 55%, var(--text-normal));
+  --st-pink: color-mix(in srgb, var(--color-pink, #d53984) 80%, var(--text-normal));
+  font-variant-numeric: tabular-nums;
+}
+
+.st-root {
+  container: st / inline-size;
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.st-wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 4px 40px;
+}
+
+/* ── Shared atoms ── */
+.st-root button,
+.st-modal .st-chip,
+.st-modal .st-icon-btn {
+  font: inherit;
+}
+
+.st-root button:focus-visible,
+.st-modal button:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 2px;
+}
+
+.st-icon {
+  display: inline-flex;
+}
+
+.st-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.st-muted {
+  font-size: 0.8em;
+  color: var(--text-muted);
+}
+
+.st-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.st-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--bar);
+  vertical-align: 0.05em;
+}
+
+.st-up { color: var(--st-red); font-weight: 600; }
+.st-down { color: var(--st-green); font-weight: 600; }
+
+.st-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.st-btn-keep {
+  color: var(--st-green);
+}
+
+.st-btn-void {
+  color: var(--st-red);
+}
+
+.st-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.st-icon-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.st-link {
+  height: auto;
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ── Logo tile ── */
+.st-logo {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--st-rule);
+  background: var(--background-primary);
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.st-logo img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+
+.st-logo-sm {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 0.85em;
+}
+
+.st-logo-sm img {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Top bar ── */
+.st-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--st-rule);
+  background: var(--background-primary);
+}
+
+.st-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.15em;
+  font-weight: 700;
+}
+
+.st-mark {
+  color: var(--text-accent);
+}
+
+.st-mark svg {
+  width: 22px;
+  height: 22px;
+}
+
+.st-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.st-tabs {
+  align-self: flex-end;
+  margin-bottom: -11px;
+}
+
+/* Tab caps: the selected tab joins the page like a coupon tab */
+.st-tab {
+  height: auto;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.st-tab:hover {
+  color: var(--text-normal);
+}
+
+.st-tab[aria-selected="true"] {
+  position: relative;
+  border-color: var(--st-rule);
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.st-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--background-primary);
+}
+
+.st-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.st-select {
+  width: auto;
+}
+
+/* ── Summary line ── */
+.st-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 40px;
+  padding: 22px 0 18px;
+  border-bottom: 1px solid var(--st-rule);
+}
+
+.st-lead-fig {
+  margin: 4px 0 2px;
+  font-size: 2.8em;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.st-lead-line {
+  font-size: 0.9em;
+  color: var(--text-muted);
+}
+
+.st-lead-line b {
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+/* Run-rate figures as a strip of fixed fields, like a coupon's foot */
+.st-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, auto));
+  margin-left: auto;
+  border: 1px solid var(--st-rule);
+  border-radius: 10px;
+  background: var(--st-stock);
+}
+
+.st-strip .st-field {
+  padding: 8px 16px 10px;
+}
+
+.st-strip .st-field-val {
+  font-size: 1.15em;
+  font-weight: 600;
+}
+
+.st-strip .is-saved .st-field-val {
+  color: var(--st-green);
+}
+
+.st-field-note {
+  font-size: 0.72em;
+  color: var(--text-muted);
+}
+
+.st-strip .is-near .st-field-val,
+.st-strip .is-near .st-field-note {
+  color: var(--st-orange);
+}
+
+.st-strip .is-over .st-field-val,
+.st-strip .is-over .st-field-note {
+  color: var(--st-red);
+}
+
+/* ── Sections ── */
+.st-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 26px 0 10px;
+}
+
+.st-section-title {
+  margin: 0;
+  font-size: 1em;
+  font-weight: 700;
+}
+
+/* ── Coupon ── */
+.st-coupons {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 1fr);
+  gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  padding: 2px 2px 6px;
+  scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+
+/* Wide panes: the next charges sit in one fixed row, no scrolling */
+@container st (min-width: 960px) {
+  .st-coupons {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+}
+
+.st-coupon {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--st-rule);
+  border-radius: 10px;
+  background: var(--st-stock);
+  scroll-snap-align: start;
+}
+
+.st-coupon-head {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  border-bottom: 1px dashed var(--st-rule);
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Perforation notches where the head tears from the body */
+.st-coupon-head::before,
+.st-coupon-head::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--st-rule);
+  border-radius: 50%;
+  background: var(--background-primary);
+}
+
+.st-coupon-head::before {
+  left: -6px;
+  clip-path: inset(0 0 0 50%);
+}
+
+.st-coupon-head::after {
+  right: -6px;
+  clip-path: inset(0 50% 0 0);
+}
+
+.st-coupon-head span {
+  white-space: nowrap;
+}
+
+.st-coupon-when {
+  color: var(--text-normal);
+}
+
+.st-coupon.is-due .st-coupon-when {
+  color: var(--st-red);
+}
+
+.st-coupon.is-trial .st-coupon-when {
+  color: var(--st-pink);
+}
+
+.st-coupon.is-trial {
+  border-color: color-mix(in srgb, var(--st-pink) 45%, var(--st-rule));
+}
+
+.st-coupon-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: auto;
+  padding: 12px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.st-coupon-body:hover {
+  background: var(--background-modifier-hover);
+}
+
+.st-coupon-id {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.st-coupon-name {
+  min-width: 0;
+}
+
+.st-coupon-name .st-muted {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.st-amount {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.st-amount-fig {
+  font-size: 1.6em;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--st-carbon);
+}
+
+/* Fixed fields with tab-cap heads */
+.st-fields {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  margin-top: auto;
+  border-top: 1px solid var(--st-rule);
+}
+
+.st-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 12px 9px;
+}
+
+.st-field + .st-field {
+  border-left: 1px solid var(--st-rule);
+}
+
+.st-field-tab {
+  padding: 1px 6px;
+  border: 1px solid var(--st-rule);
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+  font-size: 0.62em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.st-field-val {
+  max-width: 100%;
+  font-size: 0.85em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.st-coupon-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.st-coupon-actions .st-btn {
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 8px;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+/* ── Filters ── */
+.st-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: min(340px, 100%);
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--st-rule);
+  border-radius: 8px;
+  background: var(--background-primary);
+  color: var(--text-muted);
+}
+
+.st-search:focus-within {
+  border-color: var(--interactive-accent);
+}
+
+.st-root .st-search input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.st-sort {
+  max-width: 140px;
+}
+
+.st-pills {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.st-pills::-webkit-scrollbar {
+  display: none;
+}
+
+.st-pill {
+  flex-shrink: 0;
+  height: auto;
+  padding: 4px 11px;
+  border: 1px solid var(--st-rule);
+  border-radius: 99px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.st-pill:hover {
+  color: var(--text-normal);
+  border-color: var(--text-faint);
+}
+
+.st-pill[aria-pressed="true"] {
+  border-color: var(--interactive-accent);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.st-pill-count {
+  margin-left: 6px;
+  opacity: 0.75;
+}
+
+/* ── Stubs ── */
+.st-stubs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.st-stub {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  height: auto;
+  padding: 9px 12px;
+  border: 1px solid var(--st-rule);
+  border-left: 2px dashed var(--st-rule);
+  border-radius: 8px;
+  background: var(--background-primary);
+  box-shadow: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.st-stub:hover {
+  border-color: var(--background-modifier-border-hover);
+  background: var(--background-modifier-hover);
+}
+
+.st-stub-mid {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.st-stub-mid .st-muted {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Inline stamps ride the subtitle line so names keep their full width */
+.st-stub-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.st-stub-line .st-stamp {
+  flex-shrink: 0;
+  font-size: 0.66em;
+}
+
+.st-stub-amt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.25;
+}
+
+.st-stub-fig {
+  font-weight: 600;
+}
+
+.st-stub-rise {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 0.72em;
+}
+
+.st-stub-rise svg {
+  width: 12px;
+  height: 12px;
+}
+
+.st-stub.is-void .st-name {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.st-stub.is-void .st-stub-fig,
+.st-stub.is-held .st-stub-fig {
+  color: var(--text-muted);
+}
+
+.st-stub.is-void .st-logo img,
+.st-stub.is-held .st-logo img {
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+/* Stamps: nothing disappears, it gets stamped */
+.st-stamp {
+  padding: 1px 6px;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  font-size: 0.74em;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-8deg);
+}
+
+.st-stamp-void { color: var(--st-red); }
+.st-stamp-held { color: var(--st-orange); }
+.st-stamp-trial { color: var(--st-pink); }
+.st-stamp-lifetime { color: var(--st-orange); }
+
+/* Void and held stamps overprint the amount, which no longer charges */
+.st-stub.is-void .st-stamp,
+.st-stub.is-held .st-stamp {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  margin-top: -0.85em;
+  padding: 2px 10px;
+  border-width: 2.5px;
+  font-size: 0.95em;
+  letter-spacing: 0.18em;
+  background: color-mix(in srgb, var(--background-primary) 55%, transparent);
+}
+
+.st-stub.is-void .st-stub-amt,
+.st-stub.is-held .st-stub-amt {
+  visibility: hidden;
+}
+
+/* Keep names clear of the overprinted stamp */
+.st-stub.is-void .st-stub-mid,
+.st-stub.is-held .st-stub-mid {
+  margin-right: 48px;
+}
+.st-stamp-paid { color: var(--st-green); }
+
+.st-stub.is-fresh .st-stamp {
+  animation: st-stamp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes st-stamp {
+  from { opacity: 0; transform: scale(1.9) rotate(-16deg); }
+  60% { opacity: 1; }
+  to { transform: rotate(-8deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-stub.is-fresh .st-stamp { animation: none; }
+}
+
+.st-no-match {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 32px 0;
+  color: var(--text-muted);
+}
+
+/* ── Empty state ── */
+.st-empty {
+  max-width: 420px;
+  margin: 56px auto;
+}
+
+.st-coupon-ghost .st-coupon-body {
+  cursor: default;
+}
+
+.st-coupon-ghost .st-coupon-body:hover {
+  background: transparent;
+}
+
+.st-coupon-ghost p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* ── Spend ── */
+.st-seg {
+  display: inline-flex;
+  margin-left: auto;
+  padding: 2px;
+  border: 1px solid var(--st-rule);
+  border-radius: 8px;
+}
+
+.st-seg button {
+  height: auto;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.st-seg button[aria-pressed="true"] {
+  background: var(--st-stock);
+  color: var(--text-normal);
+}
+
+.st-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.st-bars {
+  padding: 8px 0 10px;
+}
+
+.st-bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  padding: 6px 14px;
+}
+
+.st-bar-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9em;
+}
+
+.st-bar-fig {
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.st-bar-track {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--background-primary);
+  overflow: hidden;
+}
+
+.st-bar-fill {
+  display: block;
+  width: var(--pct);
+  height: 100%;
+  border-radius: 99px;
+  background: var(--bar);
+}
+
+.st-rates {
+  margin-top: 16px;
+}
+
+/* ── Settings tab ── */
+.st-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 720px;
+  margin-top: 24px;
+}
+
+.st-settings-body {
+  padding: 0 16px;
+}
+
+.st-settings-body .setting-item:first-child {
+  border-top: 0;
+}
+
+/* ── Note embed ── */
+.st-embed {
+  margin: 8px 0;
+  background: transparent;
+}
+
+.st-embed-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.st-embed-list > .st-muted {
+  margin: 8px 12px;
+}
+
+.st-embed-row {
+  display: grid;
+  grid-template-columns: 6.5em auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: auto;
+  padding: 6px 12px;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.st-embed-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.st-embed-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.st-embed-row .st-stamp {
+  flex-shrink: 0;
+  font-size: 0.62em;
+}
+
+.st-embed-when {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.st-embed-row.is-due .st-embed-when {
+  color: var(--st-red);
+}
+
+.st-embed-open {
+  align-self: flex-start;
+  margin: 2px 12px 10px;
+  font-size: 0.85em;
+}
+
+/* ── Notices (rendered by Obsidian outside the view) ── */
+.st-notice-list {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.st-notice-btn {
+  margin-left: 8px;
+  margin-top: 6px;
+}
+
+/* ── Modal ── */
+.st-modal .st-modal-section {
+  margin-top: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--st-rule);
+}
+
+.st-modal .st-modal-section .setting-item-name {
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.st-modal .st-trial-row .setting-item-description {
+  color: var(--st-pink);
+}
+
+.st-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 2px 0 12px;
+}
+
+.st-chip {
+  height: auto;
+  padding: 3px 10px;
+  font-size: 0.8em;
+}
+
+.st-carbon {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0 8px;
+}
+
+.st-carbon-row {
+  display: grid;
+  grid-template-columns: 72px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--st-rule);
+  font-size: 0.9em;
+}
+
+.st-carbon-date {
+  color: var(--text-muted);
+}
+
+.st-carbon-fig {
+  font-weight: 600;
+  color: var(--st-carbon);
+}
+
+.st-carbon-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.st-carbon-add input {
+  width: 150px;
+}
+
+.st-modal .st-notes .setting-item-info {
+  display: none;
+}
+
+.st-modal .st-notes .setting-item-control,
+.st-modal .st-notes textarea {
+  width: 100%;
+}
+
+.st-modal-actions .setting-item-control {
+  justify-content: flex-end;
+}
+
+.st-modal-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ── Narrow panes and phones (pane width, not window width) ── */
+@container st (max-width: 640px) {
+  .st-title { flex: 1; }
+  .st-tabs { order: 3; width: 100%; }
+  .st-tools { margin-left: 0; }
+  .st-summary { gap: 14px; }
+  .st-lead-fig { font-size: 2.3em; }
+  .st-strip { width: 100%; margin-left: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .st-strip .st-field { padding: 8px 10px 9px; }
+  .st-strip .st-field-val { font-size: 1em; }
+  .st-tabs { margin-bottom: -11px; gap: 0; }
+  .st-tab { flex: 1; padding: 6px 4px; letter-spacing: 0.06em; }
+  /* One-handed: 44px touch targets */
+  .st-coupon-actions .st-btn,
+  .st-pill,
+  .st-tab { min-height: 44px; }
+  .st-pill { padding: 0 14px; }
+  .st-coupons { grid-auto-columns: 82%; }
+  .st-search { width: 100%; margin-left: 0; }
+  .st-stubs { grid-template-columns: minmax(0, 1fr); }
+  .st-title { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .st-panels { grid-template-columns: 1fr; }
+}
+
+@container st (max-width: 420px) {
+  .st-btn-cta .st-icon + span { display: none; }
+  .st-strip .st-field-tab { font-size: 0.56em; }
+}
