@@ -154,12 +154,14 @@ Renewals makes two kinds of network request:
 
 ## Development
 
-There is no build step: `main.js` and `styles.css` are the shipped files.
+The plugin needs no build step or runtime: `main.js` and `styles.css` are the shipped files. The steps below are only for working on the code.
+
+To use the browser preview and tests, serve the folder with any static file server (browsers block these pages when opened straight from disk), for example:
 
 ```bash
 git clone https://github.com/varunlakshmaiah/obsidian-renewals.git
 cd obsidian-renewals
-python3 -m http.server 8765
+python3 -m http.server 8765   # or: npx serve -l 8765
 ```
 
 - **Preview**: open <http://127.0.0.1:8765/preview/index.html> to run the plugin in a browser against a stand-in for the Obsidian API, with fictional demo data and theme, accent, and pane-width switches.
