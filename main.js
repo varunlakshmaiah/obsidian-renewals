@@ -786,11 +786,11 @@ class DashboardView extends ItemView {
     const charges = next.filter((s) => !isTrial(s)).slice(0, COUPON_COUNT);
 
     if (trials.length) {
-      const row = h('div', { cls: 'st-coupons' }, this.sectionHead(parent, 'Trials converting', String(trials.length)));
+      const row = h('div', { cls: 'st-coupons' }, h('div', { cls: 'st-coupons-wrap' }, this.sectionHead(parent, 'Trials converting', String(trials.length))));
       trials.forEach((s) => this.renderCoupon(row, s, true));
     }
     if (charges.length) {
-      const row = h('div', { cls: 'st-coupons' }, this.sectionHead(parent, 'Next charges', `next ${charges.length}`));
+      const row = h('div', { cls: 'st-coupons' }, h('div', { cls: 'st-coupons-wrap' }, this.sectionHead(parent, 'Next charges', `next ${charges.length}`)));
       charges.forEach((s) => this.renderCoupon(row, s, false));
     }
 

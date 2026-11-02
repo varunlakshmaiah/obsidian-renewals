@@ -334,8 +334,22 @@
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
   padding: 2px 2px 6px;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+
+/* Right-edge fade hinting more coupons; an overlay rather than mask-image, which the directory lint flags */
+.st-coupons-wrap {
+  position: relative;
+}
+
+.st-coupons-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 32px;
+  background: linear-gradient(to right, transparent, var(--background-primary));
+  pointer-events: none;
 }
 
 /* Wide panes: the next charges sit in one fixed row, no scrolling */
@@ -344,8 +358,10 @@
     grid-auto-flow: row;
     grid-template-columns: repeat(5, minmax(0, 1fr));
     overflow: visible;
-    -webkit-mask-image: none;
-    mask-image: none;
+  }
+
+  .st-coupons-wrap::after {
+    display: none;
   }
 }
 

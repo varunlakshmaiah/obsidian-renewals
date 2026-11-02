@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 1.0.3
+
+- Coupon row fade drawn as an overlay instead of `mask-image`, clearing the last directory CSS lint warning
+
 ## 1.0.2
 
 - Release assets now carry GitHub artifact attestations
