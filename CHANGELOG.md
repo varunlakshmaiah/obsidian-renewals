@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 1.0.2
+
+- Release assets now carry GitHub artifact attestations
+- Coupon notches drawn without `clip-path`, and `scrollbar-width` removed, to clear the directory's CSS lint warnings
+
 ## 1.0.1
 
 - Plugin name is now "Renewals - Subscription Manager" to meet Obsidian's naming rules (no colons)
