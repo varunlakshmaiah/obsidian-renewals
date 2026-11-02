@@ -2,7 +2,7 @@
   <img src="assets/logo-tile.svg" width="96" alt="Renewals logo: a ticket stub with a renew arrow">
 </p>
 
-<h1 align="center">Renewals: Subscription Manager</h1>
+<h1 align="center">Renewals - Subscription Manager</h1>
 
 <p align="center">
   Track subscriptions, free trials, and recurring payments inside your Obsidian vault.<br>
@@ -139,7 +139,7 @@ Everything is configurable from the **Settings** tab inside the dashboard, or fr
 
 1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/varunlakshmaiah/obsidian-renewals/releases/latest).
 2. Put them in `<your vault>/.obsidian/plugins/renewals/`.
-3. Reload Obsidian and enable **Renewals: Subscription Manager** under **Settings → Community plugins**.
+3. Reload Obsidian and enable **Renewals - Subscription Manager** under **Settings → Community plugins**.
 
 Open it from the ribbon icon or the command palette.
 

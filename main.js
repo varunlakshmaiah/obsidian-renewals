@@ -1438,7 +1438,7 @@ class RenewalsPlugin extends Plugin {
     try {
       if (!vault.getAbstractFileByPath(folder)) await vault.createFolder(folder);
       const existing = vault.getAbstractFileByPath(path);
-      if (existing instanceof TFile) await vault.modify(existing, content);
+      if (existing instanceof TFile) await vault.process(existing, () => content);
       else await vault.create(path, content);
       new Notice(`Exported ${subs.length} subscriptions to ${path}`);
     } catch (e) {

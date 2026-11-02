@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 1.0.1
+
+- Plugin name is now "Renewals - Subscription Manager" to meet Obsidian's naming rules (no colons)
+- Re-exporting on the same day overwrites the file with `Vault.process`
+
 ## 1.0.0
 
 First public release.
