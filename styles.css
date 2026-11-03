@@ -1060,18 +1060,19 @@
   .st-title { flex: 1; }
   .st-tabs { order: 3; width: 100%; }
   .st-tools { margin-left: 0; }
-  .st-summary { gap: 14px; }
-  .st-lead-fig { font-size: 2.3em; }
+  .st-summary { gap: 12px; padding: 14px 0 12px; }
+  .st-lead-fig { font-size: 2em; }
+  .st-section-head { margin: 18px 0 8px; }
   .st-strip { width: 100%; margin-left: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .st-strip .st-field { padding: 8px 10px 9px; }
   .st-strip .st-field-val { font-size: 1em; }
   .st-tabs { margin-bottom: -11px; gap: 0; }
   .st-tab { flex: 1; padding: 6px 4px; letter-spacing: 0.06em; }
-  /* One-handed: 44px touch targets */
+  /* One-handed: 40px touch targets, Obsidian's own small touch size; phones already enlarge the text */
   .st-coupon-actions .st-btn,
   .st-pill,
-  .st-tab { min-height: 44px; }
-  .st-pill { padding: 0 14px; }
+  .st-tab { min-height: 40px; }
+  .st-pill { padding: 0 12px; }
   .st-coupons { grid-auto-columns: 82%; }
   .st-search { width: 100%; margin-left: 0; }
   .st-stubs { grid-template-columns: minmax(0, 1fr); }
@@ -1082,4 +1083,16 @@
 @container st (max-width: 420px) {
   .st-btn-cta .st-icon + span { display: none; }
   .st-strip .st-field-tab { font-size: 0.56em; }
+  /* Settings: the control goes under its label so the label is not squeezed into a narrow column */
+  .st-settings .setting-item:not(.mod-toggle) { flex-wrap: wrap; }
+  .st-settings .setting-item:not(.mod-toggle) .setting-item-control { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }
+  .st-settings .setting-item-control > input,
+  .st-settings .setting-item-control > select { flex: 1 1 8em; min-width: 0; }
 }
+
+/* Phones: Obsidian already stacks each setting in a modal and makes every control 44px and full width.
+   Keep paired controls (amount + currency) side by side and the settings close together. */
+.is-phone .st-modal .setting-item:not(.setting-item-heading) { gap: 6px; }
+.is-phone .st-modal .setting-item-control { flex-wrap: nowrap; gap: 8px; }
+.is-phone .st-modal .setting-item-control > input,
+.is-phone .st-modal .setting-item-control > select { width: auto; flex: 1 1 0; min-width: 0; }

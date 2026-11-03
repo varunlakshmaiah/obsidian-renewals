@@ -182,7 +182,7 @@
     addTextArea(cb) { cb(component(this.controlEl.createEl('textarea'))); return this; }
     addDropdown(cb) { cb(component(this.controlEl.createEl('select', 'dropdown'))); return this; }
     addButton(cb) { cb(component(this.controlEl.createEl('button'))); return this; }
-    addToggle(cb) { cb(component(this.controlEl.createEl('label', 'checkbox-container').createEl('input', { type: 'checkbox' }))); return this; }
+    addToggle(cb) { this.settingEl.addClass('mod-toggle'); cb(component(this.controlEl.createEl('label', 'checkbox-container').createEl('input', { type: 'checkbox' }))); return this; }
   }
 
   // ── Vault (in memory) ──

@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 1.0.4
+
+- Tighter layout on phones: the subscription form sits closer together and keeps the amount and currency side by side
+- Tabs, filter pills and trial actions are 40px tall on narrow panes instead of 44px
+- Settings tab on narrow panes puts each control under its label, so labels and descriptions are no longer squeezed into a narrow column
+- Less empty space around the summary and section headings in narrow panes
+
 ## 1.0.3
 
 - Coupon row fade drawn as an overlay instead of `mask-image`, clearing the last directory CSS lint warning

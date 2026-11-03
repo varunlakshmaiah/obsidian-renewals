@@ -166,7 +166,7 @@ Every subscription is a ticket in a wallet. What charges next is the coupon on t
 
 The world runs inside Obsidian, so it owns no colour and no typeface. The theme's surfaces become coupon stock, the theme's border becomes the hairline rule, the theme's accent becomes carbon, and the theme's named hues become ink for stamps, drawn toward body text until they pass AA. The result is dense and flat: hairline rules, dashed perforations, and a few bordered caps do all the structuring, with no shadows and no fills beyond the one stock tone.
 
-Density is a desktop virtue and a phone obligation at once. The layout responds to the width of the pane, not the window, so a narrow sidebar leaf and a phone both get the one-handed arrangement with 44px touch targets.
+Density is a desktop virtue and a phone obligation at once. The layout responds to the width of the pane, not the window, so a narrow sidebar leaf and a phone both get the one-handed arrangement with 40px touch targets (Obsidian's small touch size; phones already enlarge the text).
 
 **Key Characteristics:**
 - Coupon anatomy: perforated head with half-round notches, clickable body, tab-cap fixed fields.
@@ -241,7 +241,7 @@ A single centred column (max 1180px, 4px side padding, 40px foot) inside the Obs
 
 Next charges and converting trials sit in a coupon row. Below 960px of pane width the row scrolls horizontally with scroll-snap and a 32px fade mask at the trailing edge, columns at least 210px. At 960px and wider it becomes a fixed five-column grid with no scrolling. The full catalogue is a grid of stubs, auto-filling at a minimum of 260px (four columns at full width). The spend view uses panels auto-fitting at a minimum of 320px.
 
-Breakpoints are container queries on the pane (`container: st / inline-size`), never media queries on the window. At 640px and below the tabs move to their own full-width row, the strip spans the width in three equal fields, the search goes full width, stubs and panels go to one column, coupons take 82% of the row so the next one peeks in, and tabs, pills, and coupon actions grow to 44px tall. At 420px and below the Add button drops its label to just the icon and the strip's field tabs shrink to 0.56em.
+Breakpoints are container queries on the pane (`container: st / inline-size`), never media queries on the window. At 640px and below the tabs move to their own full-width row, the strip spans the width in three equal fields, the search goes full width, stubs and panels go to one column, coupons take 82% of the row so the next one peeks in, and tabs, pills, and coupon actions grow to 40px tall. At 420px and below the Add button drops its label to just the icon and the strip's field tabs shrink to 0.56em, and each setting in the settings tab puts its control under its label. On phones (`.is-phone`) Obsidian stacks modal settings and makes inputs 44px and full width, so the plugin only keeps the amount and currency side by side and tightens the gaps.
 
 Spacing is on a small, irregular rhythm drawn from the build: 4, 6, 8, 12, 16, 26, and 40px, with 7, 9, 10, 11, 14, and 22px used for optical padding inside coupons and controls.
 
@@ -266,7 +266,7 @@ The upcoming charge, as a ticket you could tear.
 - **Head:** muted uppercase coupon-head type, 7px 12px padding, the when-label on the left in ink and the date on the right, a dashed hairline below with a notch on each edge. The when-label turns void red when the charge is today or tomorrow, and trial pink on trial coupons.
 - **Body:** a full-width button (12px padding, 12px gap) holding the logo tile, name and plan, and the amount figure in carbon with the base-currency approximation in muted text. Hover fills with the theme hover tint; it opens the edit modal.
 - **Fixed fields:** a two-column foot (1fr 1.4fr) under a solid hairline, each field split by a vertical hairline and capped by a field tab.
-- **Trial variant:** the border tints toward trial pink and an action row adds Keep (paid green text) and Cancel trial (void red text), both flexible, 44px tall on narrow panes.
+- **Trial variant:** the border tints toward trial pink and an action row adds Keep (paid green text) and Cancel trial (void red text), both flexible, 40px tall on narrow panes.
 - **Panel variant:** spend panels reuse the coupon shell and head, with category bars in the body.
 
 ### Stub
@@ -283,7 +283,7 @@ The only status device. A bordered, rotated, uppercase cap in its ink: VOID (voi
 - **Style:** uppercase tab-cap type, 6px 14px padding, top-rounded 6px, transparent border and fill at rest, muted ink.
 - **Hover:** ink turns normal.
 - **Selected:** hairline border on three sides, page fill, a 2px page-coloured strip covering the bar's bottom rule so the tab joins the page like a coupon tab. The tab row overlaps the bar's hairline by 11px.
-- **Narrow panes:** the tabs take a full-width row and grow to 44px tall.
+- **Narrow panes:** the tabs take a full-width row and grow to 40px tall.
 
 - **Settings tab:** the third tab holds Preferences and Data as coupon panels (max 720px) with native Obsidian setting rows inside; Obsidian's own settings screen renders the same preferences from one shared function.
 
@@ -294,7 +294,7 @@ The run-rate figures (Monthly, Annual, Saved) as a coupon's foot detached: a thr
 - **Style:** 99px radius, 1px hairline, transparent, 0.8em/600 muted text, 4px 11px padding, count trailing at 75% opacity. The row scrolls horizontally with the scrollbar hidden.
 - **Hover:** ink turns normal and the outline moves to faint ink.
 - **Pressed:** interactive accent fill and border with on-accent text.
-- **Narrow panes:** 44px tall, 0 14px padding.
+- **Narrow panes:** 40px tall, 0 12px padding.
 
 ### Buttons
 - **Primary:** Obsidian's native call-to-action (`mod-cta`), unrestyled apart from an icon and label gap; the label hides below 420px.
@@ -326,7 +326,7 @@ Reminders and undo use Obsidian's own notices, so they carry no coupon styling: 
 - **Do** set money figures that are about to charge in carbon (`var(--text-accent)`) at figure sizes (1.6em, 700).
 - **Do** build new containers as coupons: 10px radius, hairline border, coupon stock, a perforated head with notches, and fixed fields capped by field tabs.
 - **Do** show state with a stamp (VOID, HELD, TRIAL, PAID, LIFETIME) and keep the record visible; overprint the amount when it no longer charges.
-- **Do** write breakpoints as container queries on the pane at 960, 640, and 420px, and give tabs, pills, and actions 44px touch targets at 640px and below.
+- **Do** write breakpoints as container queries on the pane at 960, 640, and 420px, and give tabs, pills, and actions 40px touch targets at 640px and below.
 - **Do** size type in em so it follows the user's Obsidian font size, and keep tabular figures on.
 - **Do** answer hover with `var(--background-modifier-hover)` and focus with a 2px `var(--interactive-accent)` outline at a 2px offset.
 - **Do** gate any motion behind `prefers-reduced-motion`, as the stamp-land animation is.
