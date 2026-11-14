@@ -187,9 +187,6 @@
 .st-tabs {
   display: flex;
   gap: 4px;
-}
-
-.st-tabs {
   align-self: flex-end;
   margin-bottom: -11px;
 }
@@ -215,14 +212,14 @@
   color: var(--text-normal);
 }
 
-.st-tab[aria-selected="true"] {
+.st-tab[aria-pressed="true"] {
   position: relative;
   border-color: var(--st-rule);
   background: var(--background-primary);
   color: var(--text-normal);
 }
 
-.st-tab[aria-selected="true"]::after {
+.st-tab[aria-pressed="true"]::after {
   content: "";
   position: absolute;
   left: 0;
@@ -1058,7 +1055,7 @@
 /* ── Narrow panes and phones (pane width, not window width) ── */
 @container st (max-width: 640px) {
   .st-title { flex: 1; }
-  .st-tabs { order: 3; width: 100%; }
+  .st-tabs { order: 3; width: 100%; gap: 0; }
   .st-tools { margin-left: 0; }
   .st-summary { gap: 12px; padding: 14px 0 12px; }
   .st-lead-fig { font-size: 2em; }
@@ -1066,7 +1063,6 @@
   .st-strip { width: 100%; margin-left: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .st-strip .st-field { padding: 8px 10px 9px; }
   .st-strip .st-field-val { font-size: 1em; }
-  .st-tabs { margin-bottom: -11px; gap: 0; }
   .st-tab { flex: 1; padding: 6px 4px; letter-spacing: 0.06em; }
   /* One-handed: 40px touch targets, Obsidian's own small touch size; phones already enlarge the text */
   .st-coupon-actions .st-btn,
@@ -1082,7 +1078,6 @@
 
 @container st (max-width: 420px) {
   .st-btn-cta .st-icon + span { display: none; }
-  .st-strip .st-field-tab { font-size: 0.56em; }
   /* Settings: the control goes under its label so the label is not squeezed into a narrow column */
   .st-settings .setting-item:not(.mod-toggle) { flex-wrap: wrap; }
   .st-settings .setting-item:not(.mod-toggle) .setting-item-control { flex: 1 1 100%; flex-wrap: wrap; min-width: 0; }

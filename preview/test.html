@@ -50,7 +50,7 @@ body { font: 13px/1.5 ui-monospace, Menlo, monospace; background: #111; color: #
   // Load main.js with a test-only export of internal helpers
   const src = await (await fetch('../main.js?' + Date.now())).text();
   const module = { exports: {} };
-  new Function('module', 'exports', 'require', src + '\nmodule.exports.__t = { advanceDate, parseCSV, normalizeRecord, upcoming, fmt, daysUntil };')(module, module.exports, () => window.__obsidian);
+  new Function('module', 'exports', 'require', src + '\nmodule.exports.__t = { advanceDate, addMonths, isoOf, parseCSV, normalizeRecord, upcoming, fmt, daysUntil };')(module, module.exports, () => window.__obsidian);
   const T = module.exports.__t;
 
   const stage = document.getElementById('stage');
@@ -75,6 +75,16 @@ body { font: 13px/1.5 ui-monospace, Menlo, monospace; background: #111; color: #
     eq(T.advanceDate('2024-02-29', 'yearly'), '2025-02-28', 'leap day yearly');
     eq(T.advanceDate('2025-11-30', 'quarterly'), '2026-02-28', 'quarterly');
     eq(T.advanceDate('2025-12-29', 'weekly'), '2026-01-05', 'weekly across year');
+  });
+  await test('addMonths clamps short months (trial "+3 months" on Nov 30)', () => {
+    eq(T.isoOf(T.addMonths(new Date(2026, 10, 30), 3)), '2027-02-28', 'Nov 30 + 3 months');
+    eq(T.isoOf(T.addMonths(new Date(2026, 0, 31), 1)), '2026-02-28', 'Jan 31 + 1 month');
+  });
+  await test('fmt keeps cents and each currency\'s minor units', () => {
+    eq(T.fmt(9.99, 'USD'), '$9.99', 'cents kept');
+    eq(T.fmt(10, 'USD'), '$10', 'whole stays compact');
+    eq(T.fmt(9.5, 'EUR'), '€9.50', 'two decimals');
+    eq(T.fmt(1234.6, 'JPY'), '¥1,235', 'yen has no minor unit');
   });
   await test('parseCSV handles quotes, commas, newlines and CRLF', () => {
     const rows = T.parseCSV('name,notes,cost\r\n"Acme, Inc","line1\nline2 ""q""",9\r\nB,,2\r\n');
@@ -372,6 +382,79 @@ body { font: 13px/1.5 ui-monospace, Menlo, monospace; background: #111; color: #
     ok($$('button').every((b) => b.textContent.trim() || b.getAttribute('aria-label')), 'every button has a name');
     ok($$('select').every((s) => s.getAttribute('aria-label')), 'selects labelled');
     ok($$('.st-stub').every((s) => s.tagName === 'BUTTON'), 'stubs are buttons');
+    ok($$('.st-tab').every((t) => t.hasAttribute('aria-pressed') && !t.hasAttribute('role')), 'tabs are toggle buttons');
+  });
+
+  // ── Audit fixes ──
+  await test('sync: a data.json change on disk is reloaded, not overwritten', async () => {
+    const disk = JSON.parse(localStorage.getItem(STORE));
+    disk.subscriptions.push({ id: 'synced', name: 'Nu Synced', cost: 3, currency: 'USD', billingCycle: 'monthly', status: 'active' });
+    localStorage.setItem(STORE, JSON.stringify(disk));
+    await plugin.onExternalSettingsChange();
+    ok(byName('Nu Synced'), 'reloaded');
+    ok($$('.st-stub').some((s) => s.textContent.includes('Nu Synced')), 'view redrawn');
+    await plugin.update({ sortBy: 'date' });
+    ok(JSON.parse(localStorage.getItem(STORE)).subscriptions.some((s) => s.id === 'synced'), 'next save keeps it');
+    await plugin.deleteSubscription('synced');
+  });
+  await test('CSV merge keeps price history and creation date', async () => {
+    await plugin.commit({ ...byName('Beta Cloud'), priceHistory: [{ date: iso(-9), oldCost: 100, newCost: 120, currency: 'EUR' }], createdAt: '2020-01-01T00:00:00.000Z' });
+    const file = await window.__obsidianApp.vault.create('merge.csv', 'id,name,cost,currency,billingCycle\nb,Beta Cloud,130,EUR,yearly\n');
+    await plugin.importFrom(file);
+    [...document.querySelectorAll('.modal button')].find((b) => b.textContent === 'Merge').click(); await tick();
+    const b = byName('Beta Cloud');
+    eq([b.cost, b.priceHistory.length, b.createdAt], [130, 1, '2020-01-01T00:00:00.000Z'], 'merged');
+  });
+  await test('ended trial stays visible, counts as spend, and is reminded', async () => {
+    const monthlyOf = () => parseFloat($('.st-strip .st-field-val').textContent.replace(/[^0-9.]/g, ''));
+    const before = monthlyOf();
+    await plugin.commit({ ...T.normalizeRecord({ id: 'xi', name: 'Xi Ended', cost: 20, currency: 'USD', billingCycle: 'monthly', status: 'trial', trialEndDate: iso(-2) }, 'USD') });
+    const coupon = $$('.st-coupon.is-trial').find((c) => c.textContent.includes('Xi Ended'));
+    ok(coupon && coupon.textContent.includes('2d overdue'), 'trial coupon shows overdue');
+    ok($$('.st-stub').find((s) => s.textContent.includes('Xi Ended')).textContent.includes('Trial ended'), 'stub says ended');
+    ok(Math.abs(monthlyOf() - before - 20) < 0.01, `monthly includes it: ${before} → ${monthlyOf()}`);
+    await plugin.remind(true);
+    ok(lastNotice().noticeEl.textContent.includes('Xi Ended · $20 · trial ended, 2d overdue'), 'reminded: ' + lastNotice().noticeEl.textContent);
+    ok(!$('.st-lead-line').textContent.includes('Xi'), 'not in the 7-day total');
+    await plugin.deleteSubscription('xi');
+  });
+  await test('a new day rolls dates forward without restarting', async () => {
+    await plugin.commit({ ...T.normalizeRecord({ id: 'om', name: 'Omicron Daily', cost: 1, currency: 'USD', billingCycle: 'weekly', status: 'active', renewalDate: iso(-3) }, 'USD') });
+    plugin.today = '2000-01-01';
+    await plugin.tick();
+    ok(T.daysUntil(byName('Omicron Daily').renewalDate) >= 0, 'rolled: ' + byName('Omicron Daily').renewalDate);
+    eq(plugin.today, iso(0), 'day recorded');
+    await plugin.deleteSubscription('om');
+  });
+  await test('pill counts equal the stubs each pill shows', () => {
+    $$('.st-pill').map((p) => p.dataset.focus).forEach((key) => {
+      const p = $(`[data-focus="${key}"]`);
+      const count = Number(p.querySelector('.st-pill-count').textContent);
+      p.click();
+      eq($$('.st-stub').length, count, key);
+    });
+    $('[data-focus="pill-all"]').click();
+  });
+  await test('focus returns to the clicked control after a redraw', () => {
+    const pill = $('[data-focus="pill-void"]');
+    pill.focus(); pill.click();
+    eq(document.activeElement.dataset.focus, 'pill-void', 'pill');
+    const tab = $('[data-focus="tab-spend"]');
+    tab.focus(); tab.click();
+    eq(document.activeElement.dataset.focus, 'tab-spend', 'tab');
+    $('[data-focus="tab-subscriptions"]').click();
+    $('[data-focus="pill-all"]').click();
+  });
+  await test('edit: switching currency with the amount logs no price change', async () => {
+    const len = byName('Iota Music').priceHistory.length;
+    plugin.openEditModal(byName('Iota Music'));
+    const modal = document.querySelector('.modal');
+    const amount = modal.querySelector('input[type="number"]');
+    amount.value = '11'; amount.dispatchEvent(new Event('input'));
+    const cur = [...modal.querySelectorAll('select')].find((s) => [...s.options].some((o) => o.value === 'EUR'));
+    cur.value = 'EUR'; cur.dispatchEvent(new Event('change'));
+    [...modal.querySelectorAll('button')].find((b) => b.textContent === 'Save').click(); await tick();
+    eq([byName('Iota Music').currency, byName('Iota Music').priceHistory.length], ['EUR', len], 'no mixed-currency record');
   });
 
   // ── Report ──

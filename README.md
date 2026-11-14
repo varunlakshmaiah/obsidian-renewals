@@ -165,7 +165,7 @@ python3 -m http.server 8765   # or: npx serve -l 8765
 ```
 
 - **Preview**: open <http://127.0.0.1:8765/preview/index.html> to run the plugin in a browser against a stand-in for the Obsidian API, with fictional demo data and theme, accent, and pane-width switches.
-- **Tests**: open <http://127.0.0.1:8765/preview/test.html> to run the automated suite (date maths, CSV parsing, data migration, every tab, filters, sorting, undo, add and edit, export and import, budget, reminders, the note embed, and basic accessibility checks).
+- **Tests**: open <http://127.0.0.1:8765/preview/test.html> to run the automated suite (date maths, CSV parsing, data migration, every tab, filters, sorting, undo, add and edit, export and import, budget, reminders, the note embed, and basic accessibility checks). From a terminal, `sh preview/run-tests.sh` runs the same suite in headless Chrome (set `CHROME` to the browser binary if it isn't `google-chrome`); releases run it before publishing.
 
 To try changes in Obsidian, symlink or copy the repository into `<vault>/.obsidian/plugins/renewals/` and toggle the plugin off and on.
 

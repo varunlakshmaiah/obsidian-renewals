@@ -20,6 +20,8 @@ jobs:
       - name: Check manifest version matches tag
         run: |
           test "$(jq -r .version manifest.json)" = "${GITHUB_REF_NAME}"
+      - name: Run tests (preview/test.html in headless Chrome)
+        run: sh preview/run-tests.sh
       - name: Attest release assets
         uses: actions/attest-build-provenance@v2
         with:

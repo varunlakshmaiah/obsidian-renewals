@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org).
 
+## 1.0.5
+
+- Changes synced from another device are reloaded instead of being overwritten by the next save
+- Merging a CSV keeps each subscription's price history and creation date
+- Trials whose end date has passed stay on the dashboard, count toward monthly spend, and are reminded daily until kept or cancelled; other overdue charges show as overdue
+- Leaving Obsidian open past midnight now rolls dates forward, shows the day's reminders, and updates Today/Tomorrow labels
+- Amounts keep their cents ($9.99 no longer shows as $10), using each currency's own minor units
+- Keyboard focus stays on the tab, filter, or toggle you pressed after the view redraws
+- The trial "+3 months" preset no longer skips past the end of short months
+- Changing a subscription's amount and currency together no longer logs a mixed-currency price change
+- Section tabs are announced as toggle buttons; small field labels on phones are slightly larger
+- The test suite runs in headless Chrome and gates every release
+
 ## 1.0.4
 
 - Tighter layout on phones: the subscription form sits closer together and keeps the amount and currency side by side

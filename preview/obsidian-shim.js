@@ -208,6 +208,7 @@
       return file;
     },
     modify: async (f, data) => { files.get(f.path).data = data; },
+    process: async (f, fn) => { const e = files.get(f.path); e.data = fn(e.data); return e.data; },
     createFolder: async (p) => { folders.add(p); },
   };
 
@@ -265,6 +266,7 @@
     addSettingTab(tab) { this._settingTab = tab; }
     addCommand(c) { this.commands[c.id] = c; }
     registerMarkdownCodeBlockProcessor(lang, fn) { this.codeBlocks[lang] = fn; }
+    registerInterval(id) { return id; }
   }
 
   async function requestUrl() { throw new Error('offline preview'); }

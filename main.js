@@ -107,8 +107,15 @@ function sym(c) {
   return CURRENCIES[c] || c;
 }
 
+// Minor units per currency (JPY 0, USD 2), looked up once each
+const DIGITS = {};
+const digitsOf = (c) => (DIGITS[c] ??= new Intl.NumberFormat('en', { style: 'currency', currency: c }).resolvedOptions().maximumFractionDigits);
+
+/** Whole amounts stay compact; 9.99 keeps its cents so it matches the statement */
 function fmt(cost, currency) {
-  return sym(currency) + Math.round(Number(cost)).toLocaleString();
+  const n = Number(cost);
+  const digits = Number.isInteger(n) ? 0 : digitsOf(currency);
+  return sym(currency) + n.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
 function fmtCycle(cycle) {
@@ -137,9 +144,17 @@ function todayISO() {
   return isoOf(new Date());
 }
 
+/** Add months without skipping short months (Jan 31 → Feb 28) */
+function addMonths(date, months) {
+  const day = date.getDate();
+  date.setDate(1);
+  date.setMonth(date.getMonth() + months);
+  date.setDate(Math.min(day, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()));
+  return date;
+}
+
 function addDaysISO(days, months = 0) {
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
+  const d = addMonths(new Date(), months);
   d.setDate(d.getDate() + days);
   return isoOf(d);
 }
@@ -167,18 +182,12 @@ function whenLabel(days) {
   return `In ${days} days`;
 }
 
-/** Roll a date forward one cycle without skipping short months (Jan 31 → Feb 28) */
+/** Roll a date forward one cycle */
 function advanceDate(dateStr, cycle) {
   const [y, m, d] = parseISO(dateStr);
   const date = new Date(y, m - 1, d);
-  if (cycle === 'weekly') {
-    date.setDate(date.getDate() + 7);
-  } else {
-    const add = cycle === 'yearly' ? 12 : cycle === 'quarterly' ? 3 : 1;
-    date.setDate(1);
-    date.setMonth(date.getMonth() + add);
-    date.setDate(Math.min(d, new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()));
-  }
+  if (cycle === 'weekly') date.setDate(date.getDate() + 7);
+  else addMonths(date, cycle === 'yearly' ? 12 : cycle === 'quarterly' ? 3 : 1);
   return isoOf(date);
 }
 
@@ -226,13 +235,35 @@ function stampOf(s) {
   return null;
 }
 
-/** Live, dated, chargeable subscriptions sorted by next charge */
+// A trial whose end date has passed is treated as paid until it is kept or cancelled
+const isCharging = (s) => isLive(s) && !isLifetime(s) && (!isTrial(s) || daysUntil(chargeDate(s)) < 0);
+
+/**
+ * Live, dated, chargeable subscriptions sorted by next charge.
+ * Past dates stay in (overdue first): anything still past-due here won't roll forward by itself.
+ */
 function upcoming(subs) {
   return subs
     .filter((s) => isLive(s) && !isLifetime(s) && chargeDate(s))
     .map((s) => ({ ...s, _days: daysUntil(chargeDate(s)), _src: s }))
-    .filter((s) => s._days >= 0)
     .sort((a, b) => a._days - b._days);
+}
+
+/** The filter pills' rules, shared by the counts and the list */
+function inFilter(s, id) {
+  switch (id) {
+    case 'week': {
+      const d = daysUntil(chargeDate(s));
+      return isLive(s) && !isLifetime(s) && d >= 0 && d <= DUE_WINDOW;
+    }
+    case 'this-month': return isLive(s) && isThisMonth(chargeDate(s));
+    case 'next-month': return isLive(s) && isNextMonth(chargeDate(s));
+    case 'active': return isLive(s) && !isTrial(s) && !isLifetime(s);
+    case 'trial': return isLive(s) && isTrial(s);
+    case 'lifetime': return isLifetime(s) && !isVoid(s);
+    case 'void': return !isLive(s);
+    default: return true;
+  }
 }
 
 /**
@@ -376,6 +407,7 @@ class SubscriptionModal extends Modal {
     this.plugin = plugin;
     this.isEdit = !!sub;
     this.originalCost = sub ? sub.cost : null;
+    this.originalCurrency = sub ? sub.currency : null;
     const cur = plugin.data.primaryCurrency;
     this.sub = sub
       ? { ...sub, priceHistory: [...sub.priceHistory] }
@@ -554,7 +586,8 @@ class SubscriptionModal extends Modal {
       b.setButtonText(this.isEdit ? 'Save' : 'Add subscription').setCta().onClick(() => {
         if (!s.name.trim()) return new Notice('Enter a name for the subscription.');
         if (!(s.cost > 0)) return new Notice('Enter an amount greater than 0.');
-        if (this.isEdit && this.originalCost && this.originalCost !== s.cost) {
+        // A currency switch isn't a price change: one record can't hold two currencies
+        if (this.isEdit && this.originalCost && this.originalCost !== s.cost && this.originalCurrency === s.currency) {
           s.priceHistory.push({ date: todayISO(), oldCost: this.originalCost, newCost: s.cost, currency: s.currency });
         }
         s.name = s.name.trim();
@@ -667,6 +700,8 @@ class DashboardView extends ItemView {
 
   render() {
     const root = this.contentEl;
+    // Rebuilding drops focus; put it back on the same control so keyboard users keep their place
+    const focusKey = root.contains(document.activeElement) ? document.activeElement.dataset.focus : null;
     root.empty();
     root.addClass('st-root');
     const subs = this.data.subscriptions;
@@ -681,6 +716,7 @@ class DashboardView extends ItemView {
       else this.renderSubscriptions(wrap, subs);
     }
     this.freshId = null;
+    if (focusKey) root.querySelector(`[data-focus="${focusKey}"]`)?.focus();
   }
 
   // ── Top bar: title, tabs, currency, export, add ──
@@ -690,12 +726,13 @@ class DashboardView extends ItemView {
     icon(ICON_ID, title).addClass('st-mark');
     h('span', { text: 'Renewals' }, title);
 
-    const tabs = h('div', { cls: 'st-tabs' }, bar);
-    tabs.setAttribute('role', 'tablist');
+    // Plain toggle buttons: the tab role would promise arrow keys and a tabpanel this view doesn't have
+    const tabs = h('nav', { cls: 'st-tabs' }, bar);
+    tabs.setAttribute('aria-label', 'Renewals sections');
     [['subscriptions', 'Subscriptions'], ['spend', 'Spend'], ['settings', 'Settings']].forEach(([id, label]) => {
       const b = h('button', { cls: 'st-tab', text: label }, tabs);
-      b.setAttribute('role', 'tab');
-      b.setAttribute('aria-selected', String(this.tab === id));
+      b.dataset.focus = 'tab-' + id;
+      b.setAttribute('aria-pressed', String(this.tab === id));
       b.addEventListener('click', () => {
         this.tab = id;
         this.render();
@@ -743,7 +780,7 @@ class DashboardView extends ItemView {
 
   // ── Summary: due-in-7 figure, run-rate strip, budget ──
   renderSummary(parent, subs) {
-    const due = upcoming(subs).filter((s) => s._days <= DUE_WINDOW);
+    const due = upcoming(subs).filter((s) => s._days >= 0 && s._days <= DUE_WINDOW);
     const dueTotal = due.reduce((n, s) => n + this.inPrimary(s.cost, s.currency), 0);
 
     let monthly = 0;
@@ -752,7 +789,7 @@ class DashboardView extends ItemView {
       if (isLifetime(s)) return;
       const m = this.inPrimary(toMonthly(s.cost, s.billingCycle), s.currency);
       if (!isLive(s)) saved += m;
-      else if (!isTrial(s)) monthly += m;
+      else if (isCharging(s)) monthly += m;
     });
 
     const sum = h('section', { cls: 'st-summary' }, parent);
@@ -815,26 +852,18 @@ class DashboardView extends ItemView {
     });
 
     const pills = h('div', { cls: 'st-pills' }, sec);
-    const counts = {
-      all: subs.length,
-      week: next.filter((s) => s._days <= DUE_WINDOW).length,
-      'this-month': subs.filter((s) => isLive(s) && isThisMonth(chargeDate(s))).length,
-      'next-month': subs.filter((s) => isLive(s) && isNextMonth(chargeDate(s))).length,
-      active: subs.filter((s) => isLive(s) && !isTrial(s) && !isLifetime(s)).length,
-      trial: subs.filter((s) => isLive(s) && isTrial(s)).length,
-      lifetime: subs.filter((s) => isLifetime(s) && !isVoid(s)).length,
-      void: subs.filter((s) => !isLive(s)).length,
-    };
     const labels = {
       all: 'All', week: 'Next 7 days', 'this-month': 'This month', 'next-month': 'Next month',
       active: 'Active', trial: 'Trial', lifetime: 'Lifetime', void: 'Void & held',
     };
     Object.keys(labels).forEach((id) => {
-      if (id !== 'all' && id !== this.activeFilter && !counts[id]) return;
+      const count = subs.filter((s) => inFilter(s, id)).length;
+      if (id !== 'all' && id !== this.activeFilter && !count) return;
       const p = h('button', { cls: 'st-pill' }, pills);
+      p.dataset.focus = 'pill-' + id;
       p.setAttribute('aria-pressed', String(this.activeFilter === id));
       h('span', { text: labels[id] }, p);
-      h('span', { cls: 'st-pill-count', text: String(counts[id]) }, p);
+      h('span', { cls: 'st-pill-count', text: String(count) }, p);
       p.addEventListener('click', () => {
         this.activeFilter = id;
         this.render();
@@ -899,19 +928,7 @@ class DashboardView extends ItemView {
   matches(s) {
     const q = this.searchQuery;
     if (q && ![s.name, s.plan, s.notes, s.category, s.paymentType, s.paymentAccount].join(' ').toLowerCase().includes(q)) return false;
-    switch (this.activeFilter) {
-      case 'week': {
-        const d = daysUntil(chargeDate(s));
-        return isLive(s) && !isLifetime(s) && d >= 0 && d <= DUE_WINDOW;
-      }
-      case 'this-month': return isLive(s) && isThisMonth(chargeDate(s));
-      case 'next-month': return isLive(s) && isNextMonth(chargeDate(s));
-      case 'active': return isLive(s) && !isTrial(s) && !isLifetime(s);
-      case 'trial': return isLive(s) && isTrial(s);
-      case 'lifetime': return isLifetime(s) && !isVoid(s);
-      case 'void': return !isLive(s);
-      default: return true;
-    }
+    return inFilter(s, this.activeFilter);
   }
 
   // ── Stubs: every service, stamped by state ──
@@ -952,7 +969,7 @@ class DashboardView extends ItemView {
       if (isVoid(s)) line = 'Cancelled';
       else if (isHeld(s)) line = 'Paused';
       else if (isLifetime(s)) line = 'Paid once';
-      else if (isTrial(s)) line = `Trial ends ${shortDate(chargeDate(s))}`;
+      else if (isTrial(s)) line = `Trial ${isCharging(s) ? 'ended' : 'ends'} ${shortDate(chargeDate(s))}`;
       else if (st && st.cls === 'paid') line = `Paid ${shortDate(s.lastPayment)}`;
       else line = chargeDate(s) ? `Next ${shortDate(chargeDate(s))}` : 'No date set';
       const lineEl = h('span', { cls: 'st-stub-line' }, mid);
@@ -994,7 +1011,7 @@ class DashboardView extends ItemView {
   renderSpend(parent, subs) {
     const yearly = this.spendScope === 'yearly';
     const suffix = yearly ? '/yr' : '/mo';
-    const live = subs.filter((s) => isLive(s) && !isTrial(s) && !isLifetime(s));
+    const live = subs.filter(isCharging);
 
     const sec = h('section', { cls: 'st-section' }, parent);
     const head = h('div', { cls: 'st-section-head' }, sec);
@@ -1002,6 +1019,7 @@ class DashboardView extends ItemView {
     const seg = h('div', { cls: 'st-seg' }, head);
     [['monthly', 'Monthly'], ['yearly', 'Annual']].forEach(([id, label]) => {
       const b = h('button', { text: label }, seg);
+      b.dataset.focus = 'scope-' + id;
       b.setAttribute('aria-pressed', String(this.spendScope === id));
       b.addEventListener('click', () => {
         this.spendScope = id;
@@ -1084,7 +1102,7 @@ class RenewalsEmbed extends MarkdownRenderChild {
     const el = this.containerEl;
     el.empty();
     el.addClass('st-root', 'st-embed');
-    const due = upcoming(data.subscriptions).filter((s) => s._days <= this.days);
+    const due = upcoming(data.subscriptions).filter((s) => s._days >= 0 && s._days <= this.days);
     const total = due.reduce((n, s) => n + this.plugin.convert(s.cost, s.currency, data.primaryCurrency), 0);
 
     const c = h('div', { cls: 'st-coupon' }, el);
@@ -1208,11 +1226,9 @@ class RenewalsSettingTab extends PluginSettingTab {
 // ============================================================
 class RenewalsPlugin extends Plugin {
   async onload() {
-    const saved = (await this.loadData()) || {};
-    this.data = Object.assign({}, DEFAULT_DATA, saved, { rates: Object.assign({}, DEFAULT_RATES, saved.rates) });
-    const list = Array.isArray(saved.subscriptions) ? saved.subscriptions : [];
-    this.data.subscriptions = list.map((s) => normalizeRecord(s, this.data.primaryCurrency)).filter(Boolean);
+    await this.loadSettings();
     this.embeds = new Set();
+    this.today = todayISO();
 
     addIcon(ICON_ID, ICON_SVG);
     this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
@@ -1243,6 +1259,29 @@ class RenewalsPlugin extends Plugin {
       await this.remind();
       this.fetchExchangeRates();
     });
+    this.registerInterval(window.setInterval(() => this.tick(), 60 * 60 * 1000));
+  }
+
+  async loadSettings() {
+    const saved = (await this.loadData()) || {};
+    this.data = Object.assign({}, DEFAULT_DATA, saved, { rates: Object.assign({}, DEFAULT_RATES, saved.rates) });
+    const list = Array.isArray(saved.subscriptions) ? saved.subscriptions : [];
+    this.data.subscriptions = list.map((s) => normalizeRecord(s, this.data.primaryCurrency)).filter(Boolean);
+  }
+
+  /** data.json changed on disk (Sync, another device): reload so our next save can't overwrite it */
+  async onExternalSettingsChange() {
+    await this.loadSettings();
+    this.refreshViews();
+  }
+
+  /** A vault left open past midnight still rolls dates, reminds, and relabels Today/Tomorrow */
+  async tick() {
+    if (this.today === todayISO()) return;
+    this.today = todayISO();
+    await this.checkAndAutoAdvance();
+    await this.remind();
+    this.refreshViews();
   }
 
   async saveSettings() {
@@ -1311,6 +1350,7 @@ class RenewalsPlugin extends Plugin {
     if (!window || (!force && this.data.lastReminder === todayISO())) return;
     if (!force) await this.update({ lastReminder: todayISO() }, false);
 
+    // Overdue items repeat daily until they're resolved, so an ended trial can't slip by
     const due = upcoming(this.data.subscriptions).filter((s) => s._days <= window);
     if (!due.length) {
       if (force) new Notice(`Nothing renews in the next ${window} days.`);
@@ -1318,11 +1358,13 @@ class RenewalsPlugin extends Plugin {
     }
     const cur = this.data.primaryCurrency;
     const total = due.reduce((n, s) => n + this.convert(s.cost, s.currency, cur), 0);
+    const overdue = due.filter((s) => s._days < 0).length;
     const notice = new Notice(createFragment((f) => {
-      f.createEl('strong', { text: `${due.length} renewal${due.length === 1 ? '' : 's'} in the next ${window} days · ${fmt(total, cur)}` });
+      f.createEl('strong', { text: `${due.length} renewal${due.length === 1 ? '' : 's'} in the next ${window} days${overdue ? ` (${overdue} overdue)` : ''} · ${fmt(total, cur)}` });
       const ul = f.createEl('ul', { cls: 'st-notice-list' });
       due.slice(0, 5).forEach((s) => {
-        ul.createEl('li', { text: `${s.name} · ${fmt(s.cost, s.currency)} · ${isTrial(s) ? 'trial converts ' : ''}${whenLabel(s._days).toLowerCase()}` });
+        const trial = !isTrial(s) ? '' : s._days < 0 ? 'trial ended, ' : 'trial converts ';
+        ul.createEl('li', { text: `${s.name} · ${fmt(s.cost, s.currency)} · ${trial}${whenLabel(s._days).toLowerCase()}` });
       });
       if (due.length > 5) f.createDiv({ text: `and ${due.length - 5} more` });
       f.createEl('button', { text: 'Open', cls: 'st-notice-btn' }).addEventListener('click', () => {
@@ -1472,7 +1514,11 @@ class RenewalsPlugin extends Plugin {
     let next = records;
     if (mode === 'merge') {
       const byId = new Map(before.map((s) => [s.id, s]));
-      records.forEach((r) => byId.set(r.id, r));
+      records.forEach((r) => {
+        const old = byId.get(r.id);
+        // CSV rows carry no price history or creation date; keep the ones we have
+        byId.set(r.id, old ? { ...r, priceHistory: r.priceHistory.length ? r.priceHistory : old.priceHistory, createdAt: old.createdAt } : r);
+      });
       next = [...byId.values()];
     }
     await this.replaceAll(next);
